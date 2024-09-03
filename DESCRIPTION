@@ -1,4 +1,4 @@
-Package: cprdcoldtools
+Package: cprdgoldtools
 Type: Package
 Title: Functions to process GOLD Aurum data files
 Version: 0.1.0
