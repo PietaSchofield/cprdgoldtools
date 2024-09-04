@@ -12,7 +12,7 @@
 #' @import magrittr
 #' @export
 load_cons <- function(pddir,dbf,ow=F,db=F,tab_name="consultations",add=F,
-    selvars=c("patid","eventdate","sysdate","constype","consid","staffid","duration")){
+    selvars2=c("patid","eventdate","sysdate","constype","consid","staffid","duration")){
   if(F){
     pddir <- gpath
     dbf <- sgdb
@@ -20,7 +20,7 @@ load_cons <- function(pddir,dbf,ow=F,db=F,tab_name="consultations",add=F,
     db <- F
     add <- T
     tab_name="consultations"
-    selvars=c("patid","eventdate","sysdate","constype","consid","staffid","duration")
+    selvars2 <- c("patid","eventdate","sysdate","constype","consid","staffid","duration")
   }
   if(add & ow){
     stop("Error both overwrite and append set. \n")
@@ -39,7 +39,7 @@ load_cons <- function(pddir,dbf,ow=F,db=F,tab_name="consultations",add=F,
     }
     nrec <- lapply(confiles,function(fn){
       dat <- readr::read_tsv(fn,col_types=readr::cols(.default=readr::col_character())) %>%
-        dplyr::select(dplyr::all_of(selvars)) %>%
+        dplyr::select(dplyr::all_of(selvars2)) %>%
         dplyr::mutate(eventdate = format(lubridate::dmy(eventdate)),
                       sysdate = format(lubridate::dmy(sysdate)))
       dbi <- duckdb::dbConnect(duckdb::duckdb(),dbf)

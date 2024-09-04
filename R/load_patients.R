@@ -49,7 +49,8 @@ load_patients <- function(pdir,dbf,ow=F,db=F,tab_name="patients",add=F,
     ext <- "new records"
   }else{
     dbi <- duckdb::dbConnect(duckdb::duckdb(),dbf)
-    nrec <- dbGetQuery(dbi,paste0("SELECT COUNT(*) FROM ",tab_name,";"))
+    nrec <- dbGetQuery(dbi,paste0("SELECT COUNT(*) AS patients FROM ",tab_name,";")) %>%
+      pull(patients)
     dbDisconnect(dbi)
     ext <- "records exist"
   }
