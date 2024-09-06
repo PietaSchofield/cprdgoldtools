@@ -3,7 +3,7 @@
 #' get the patient data
 #'
 #' @export
-get_table <- function(dbf,sqlstr=NULL,tabname=NULL,fields='*',whereclause=NULL){
+make_table <- function(dbf,sqlstr=NULL,tabname=NULL,fields='*',whereclause=NULL){
   if(F){
     dbf <- dbfile
     tabname <- "drug_exposures"
@@ -24,7 +24,7 @@ get_table <- function(dbf,sqlstr=NULL,tabname=NULL,fields='*',whereclause=NULL){
     strsql <- sqlstr
   }
   dbi <- dbConnect(duckdb(),dbf)
-  pats <- dbGetQuery(dbi,strsql) %>% tibble()
+  pats <- dbExecute(dbi,strsql) 
   dbDisconnect(dbi)
   return(pats)
 }

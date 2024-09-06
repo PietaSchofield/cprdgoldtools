@@ -5,8 +5,8 @@ make_denom_db <- function(dbn,denomdir,linkdir,db=F){
   if(db){
     golddir <- file.path(Sys.getenv("HOME"),"Projects","refdata","gold",".data")
     linkdir <- file.path(golddir,"January_2022_Source_GOLD")
-    denomdir <- file.path(golddir,"denomfiles")
-    dbn <- file.path(golddir,"denom_202409.duckdb")
+    denomdir <- file.path(golddir,"202409_CPRDGold")
+    dbn <- file.path(golddir,"202409_gold.duckdb")
   }
 
   tabs <- cprdgoldtools::list_tables(dbf=dbn)
@@ -17,7 +17,9 @@ make_denom_db <- function(dbn,denomdir,linkdir,db=F){
              frd=lubridate::dmy(frd),
              crd=lubridate::dmy(crd),
              tod=lubridate::dmy(tod),
-             deathdate=lubridate::dmy(deathdate))
+             deathdate=lubridate::dmy(deathdate),
+             pracid=stringr::str_sub(patid,5))
+
     cprdgoldtools::load_table(dbf=dbn,dataset=acceptable,tab_name="acceptable_patients",ow=T)
     rm(acceptable)
     gc()
