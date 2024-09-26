@@ -1,16 +1,16 @@
 #' Make a control cohort using some inclusion and exclusion lists
 #'
 #' @export
-make_control_cohort <- function(dbn,exclude,include,maxyear,db=T,silent=F){
+make_control_sprint <- function(dbn,exclude,include,maxyear,db=T,silent=F){
   if(db){
     exclude <- case %>% select(patid)
     include <- poss %>% select(patid)
     maxyear <- 2024 - 30
+    cprdgoldtools::list_tables(dbf=dbn)
   }
   cprdgoldtools::load_table(dbf=dbn,dataset=exclude,tab_name="exclude",ow=T)
   cprdgoldtools::load_table(dbf=dbn,dataset=include,tab_name="include",ow=T)
 
-  cprdgoldtools::get_table(dbf=dbn,sqlstr="SELECT * FROM acceptable_patients LIMIT 100")
 
   sample_plan_sql <- str_c("
     SELECT DISTINCT
@@ -39,7 +39,7 @@ make_control_cohort <- function(dbn,exclude,include,maxyear,db=T,silent=F){
       pat.gender,
       prac.region")
   
-  sample_plan <- get_table(dbf=dbn,sqlstr=sample_plan_sql)
+  sample_plan <- cprdgoldtools::get_table(dbf=dbn,sqlstr=sample_plan_sql)
 
   get_possibles_sql <- str_c("
    SELECT DISTINCT
@@ -62,14 +62,14 @@ make_control_cohort <- function(dbn,exclude,include,maxyear,db=T,silent=F){
      linkages AS lnk
      ON lnk.patid=pat.patid
    WHERE
-     pat.yob <= ",maxyear,"
+     pat.yob <= ",maxyear," AND
      exc.patid IS NULL AND
      lnk.hes_apc_e LIKE '1' AND
      lnk.ons_death_e LIKE '1' AND
      lnk.lsoa_e LIKE '1' AND
      lnk.hes_op_e LIKE '1'")
 
-  possibles <- get_table(dbf=dbn,sqlstr=get_possibles_sql)
+  possibles <- cprdgoldtools::get_table(dbf=dbn,sqlstr=get_possibles_sql)
 
   sampled_data <- sample_plan %>% dplyr::filter(yob <= maxyear) %>%
     left_join(possibles, by = c("region","yob","gender")) %>%
@@ -103,7 +103,7 @@ make_control_cohort <- function(dbn,exclude,include,maxyear,db=T,silent=F){
     control_data1 <- sampled_data1 
   }
 
-  possibles <- possibles %>% dplyr::filter(!patid %in% control_data$patid)
+  possibles <- possibles %>% dplyr::filter(!patid %in% control_data1$patid)
 
   sampled_data <- sample_plan %>% dplyr::filter(yob <= maxyear) %>% 
     group_by(region,gender) %>% summarise(nums=sum(nums),.groups="drop") %>%
@@ -166,12 +166,12 @@ make_control_cohort <- function(dbn,exclude,include,maxyear,db=T,silent=F){
      lnk.lsoa_e LIKE '1' AND
      lnk.hes_op_e LIKE '1'")
   
-  cases_data <- get_table(dbf=dbn,sqlstr=cases_sql)
+  cases_data <- cprdgoldtools::get_table(dbf=dbn,sqlstr=cases_sql)
 
 
   all_patients <- list(case=cases_data,control=control_data) %>% plyr::ldply(.id="cohort") %>% tibble()
   ret <- all_patients %>% nrow()
-  load_table(dbf=dbn,dataset=all_patients,tab_name="sample_cohort",ow=T)
+  cprdgoldtools::load_table(dbf=dbn,dataset=all_patients,tab_name="sample_cohort",ow=T)
 
   return(ret)
 }
