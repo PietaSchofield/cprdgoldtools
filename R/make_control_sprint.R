@@ -1,0 +1,177 @@
+#' Make a control cohort using some inclusion and exclusion lists
+#'
+#' @export
+make_control_cohort <- function(dbn,exclude,include,maxyear,db=T,silent=F){
+  if(db){
+    exclude <- case %>% select(patid)
+    include <- poss %>% select(patid)
+    maxyear <- 2024 - 30
+  }
+  cprdgoldtools::load_table(dbf=dbn,dataset=exclude,tab_name="exclude",ow=T)
+  cprdgoldtools::load_table(dbf=dbn,dataset=include,tab_name="include",ow=T)
+
+  cprdgoldtools::get_table(dbf=dbn,sqlstr="SELECT * FROM acceptable_patients LIMIT 100")
+
+  sample_plan_sql <- str_c("
+    SELECT DISTINCT
+      prac.region,
+      pat.yob,
+      pat.gender,
+      COUNT(*) AS nums
+    FROM
+      acceptable_patients AS pat
+    INNER JOIN 
+      exclude AS ic
+      ON ic.patid=pat.patid
+   INNER JOIN
+     linkages AS lnk
+     ON lnk.patid=pat.patid
+    INNER JOIN
+      practices AS prac
+      ON prac.pracid=lnk.pracid
+   WHERE
+     lnk.hes_apc_e LIKE '1' AND
+     lnk.ons_death_e LIKE '1' AND
+     lnk.lsoa_e LIKE '1' AND
+     lnk.hes_op_e LIKE '1' 
+    GROUP BY
+      pat.yob,
+      pat.gender,
+      prac.region")
+  
+  sample_plan <- get_table(dbf=dbn,sqlstr=sample_plan_sql)
+
+  get_possibles_sql <- str_c("
+   SELECT DISTINCT
+     pat.patid,
+     pra.region,
+     pat.yob,
+     pat.gender
+   FROM 
+     acceptable_patients AS pat
+   INNER JOIN
+     practices AS pra
+     ON pra.pracid=pat.pracid
+   LEFT JOIN
+     exclude AS exc
+     ON exc.patid=pat.patid
+   INNER JOIN
+     include AS inc
+     ON inc.patid=pat.patid
+   INNER JOIN
+     linkages AS lnk
+     ON lnk.patid=pat.patid
+   WHERE
+     pat.yob <= ",maxyear,"
+     exc.patid IS NULL AND
+     lnk.hes_apc_e LIKE '1' AND
+     lnk.ons_death_e LIKE '1' AND
+     lnk.lsoa_e LIKE '1' AND
+     lnk.hes_op_e LIKE '1'")
+
+  possibles <- get_table(dbf=dbn,sqlstr=get_possibles_sql)
+
+  sampled_data <- sample_plan %>% dplyr::filter(yob <= maxyear) %>%
+    left_join(possibles, by = c("region","yob","gender")) %>%
+    group_split(region,yob, gender) 
+
+  sampled_data1 <- lapply(sampled_data,function(x){
+    ss <- x %>% pull(nums) %>% unique()
+    slice_sample(x, n=5*ss,replace = FALSE)
+     }) %>% bind_rows() %>% select(-nums)
+
+  missing_data <- sampled_data1 %>% dplyr::filter(is.na(patid)) %>% 
+    group_by(yob,gender) %>% summarise(nums=n(),.groups="drop")
+   
+  if(nrow(missing_data)>0){
+    sampled_data <- missing_data %>%
+      left_join(possibles, by = c("yob","gender")) %>%
+      group_split(yob, gender) 
+
+    sampled_data2 <- lapply(sampled_data,function(x){
+      ss <- x %>% pull(nums) %>% unique()
+      slice_sample(x, n=5*ss,replace = FALSE)
+       }) %>% bind_rows() %>% select(-nums)
+
+  }else{
+    sampled_data2 <- NULL
+  }
+
+  if(!is.null(sampled_data2)){
+    control_data1 <- bind_rows(sampled_data1,sampled_data2) %>% dplyr::filter(!is.na(patid))
+  }else{
+    control_data1 <- sampled_data1 
+  }
+
+  possibles <- possibles %>% dplyr::filter(!patid %in% control_data$patid)
+
+  sampled_data <- sample_plan %>% dplyr::filter(yob <= maxyear) %>% 
+    group_by(region,gender) %>% summarise(nums=sum(nums),.groups="drop") %>%
+    left_join(possibles, by = c("region","gender")) %>%
+    group_split(region, gender) 
+
+  sampled_data3 <- lapply(sampled_data,function(x){
+    ss <- x %>% pull(nums) %>% unique()
+    slice_sample(x, n=5*ss,replace = FALSE)
+     }) %>% bind_rows() %>% select(-nums)
+
+  missing_data <- sampled_data1 %>% dplyr::filter(is.na(patid)) %>% 
+    group_by(region,gender) %>% summarise(nums=n(),.groups="drop")
+   
+  if(nrow(missing_data)>0){
+    sampled_data <- missing_data %>%
+      left_join(possibles, by = c("yob","gender")) %>%
+      group_split(yob, gender) 
+
+    sampled_data4 <- lapply(sampled_data,function(x){
+      ss <- x %>% pull(nums) %>% unique()
+      slice_sample(x, n=5*ss,replace = FALSE)
+       }) %>% bind_rows() %>% select(-nums)
+
+  }else{
+    sampled_data4 <- NULL
+  }
+
+  if(!is.null(sampled_data4)){
+    control_data2 <- bind_rows(sampled_data3,sampled_data4) %>% dplyr::filter(!is.na(patid))
+  }else{
+    control_data2 <- sampled_data3 
+  }
+
+  rm(possibles)
+  gc()
+
+  control_data <- bind_rows(control_data1,control_data2) %>% unique()
+  
+  cases_sql <- str_c("
+    SELECT DISTINCT
+      pat.patid,
+      pat.gender,
+      pat.yob,
+      pra.region
+    FROM
+      acceptable_patients AS pat
+    INNER JOIN 
+      exclude AS ic
+      ON ic.patid=pat.patid
+    INNER JOIN
+      linkages AS lnk
+      ON lnk.patid=pat.patid
+    INNER JOIN
+      practices AS pra
+      ON pra.pracid=lnk.pracid
+   WHERE
+     lnk.hes_apc_e LIKE '1' AND
+     lnk.ons_death_e LIKE '1' AND
+     lnk.lsoa_e LIKE '1' AND
+     lnk.hes_op_e LIKE '1'")
+  
+  cases_data <- get_table(dbf=dbn,sqlstr=cases_sql)
+
+
+  all_patients <- list(case=cases_data,control=control_data) %>% plyr::ldply(.id="cohort") %>% tibble()
+  ret <- all_patients %>% nrow()
+  load_table(dbf=dbn,dataset=all_patients,tab_name="sample_cohort",ow=T)
+
+  return(ret)
+}
